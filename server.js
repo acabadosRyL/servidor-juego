@@ -3,7 +3,6 @@ const cors = require('cors');
 
 const app = express();
 
-// Configuración amplia de CORS para Android y navegadores
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'OPTIONS'],
@@ -12,35 +11,64 @@ app.use(cors({
 
 app.use(express.json());
 
-// Almacén temporal de salas en memoria
-let partidas = [];
+// Guardar salas y jugadores en memoria
+let partidas = {};
 
-// Ruta de prueba para verificar que el servidor está despierto
-app.get('/', (req, res) => {
-    res.send('Servidor de Juego RPG activo');
-});
-
-// Registrar una nueva sala
+// Crear una nueva sala
 app.post('/crear-partida', (req, res) => {
-    const { nombreSala, ipJugador } = req.body;
+    const { nombreSala } = req.body;
+    const salaId = nombreSala || 'Sala_' + Math.floor(Math.random() * 1000);
     
-    // Evitar duplicados con el mismo nombre
-    partidas = partidas.filter(p => p.nombreSala !== nombreSala);
+    if (!partidas[salaId]) {
+        partidas[salaId] = {
+            id: salaId,
+            nombreSala: salaId,
+            jugadores: {}
+        };
+    }
     
-    const nuevaPartida = {
-        id: Date.now().toString(),
-        nombreSala: nombreSala || 'Sala Sin Nombre',
-        ipJugador: ipJugador || 'Jugador 1',
-        creadoEn: new Date()
-    };
-    
-    partidas.push(nuevaPartida);
-    res.json({ status: 'ok', partida: nuevaPartida });
+    res.json({ status: 'ok', salaId: salaId });
 });
 
-// Consultar salas disponibles
+// Listar salas activas
 app.get('/buscar-partidas', (req, res) => {
-    res.json({ partidas });
+    const lista = Object.values(partidas).map(p => ({
+        id: p.id,
+        nombreSala: p.nombreSala,
+        totalJugadores: Object.keys(p.jugadores).length
+    }));
+    res.json({ partidas: lista });
+});
+
+// Sincronizar posición del jugador y recibir la de los demás
+app.post('/mover-jugador', (req, res) => {
+    const { salaId, playerId, name, x, y, animFrame, direction } = req.body;
+
+    if (!partidas[salaId]) {
+        partidas[salaId] = { id: salaId, nombreSala: salaId, jugadores: {} };
+    }
+
+    // Actualizar datos del jugador actual
+    partidas[salaId].jugadores[playerId] = {
+        id: playerId,
+        name: name,
+        x: x,
+        y: y,
+        animFrame: animFrame,
+        direction: direction,
+        lastUpdate: Date.now()
+    };
+
+    // Limpiar jugadores desconectados (más de 10 segundos sin enviar datos)
+    const ahora = Date.now();
+    Object.keys(partidas[salaId].jugadores).forEach(id => {
+        if (ahora - partidas[salaId].jugadores[id].lastUpdate > 10000) {
+            delete partidas[salaId].jugadores[id];
+        }
+    });
+
+    // Devolver todos los demás jugadores en la sala
+    res.json({ jugadores: partidas[salaId].jugadores });
 });
 
 const PORT = process.env.PORT || 3000;
