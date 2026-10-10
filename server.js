@@ -1,27 +1,49 @@
 const express = require('express');
 const cors = require('cors');
+
 const app = express();
 
-app.use(cors());
+// Configuración amplia de CORS para Android y navegadores
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type']
+}));
+
 app.use(express.json());
 
-// Guardaremos las salas o partidas creadas
+// Almacén temporal de salas en memoria
 let partidas = [];
 
-// El cliente 1 llama aquí para CREAR el servidor / sala
-app.post('/crear-partida', (req, res) => {
-    const { nombreSala, ipJugador } = req.body;
-    const nuevaPartida = { id: Date.now(), nombreSala, ipJugador };
-    partidas.push(nuevaPartida);
-    res.json({ status: "ok", mensaje: "Partida creada", partida: nuevaPartida });
+// Ruta de prueba para verificar que el servidor está despierto
+app.get('/', (req, res) => {
+    res.send('Servidor de Juego RPG activo');
 });
 
-// El cliente 2 llama aquí para ENCONTRAR el servidor / sala
+// Registrar una nueva sala
+app.post('/crear-partida', (req, res) => {
+    const { nombreSala, ipJugador } = req.body;
+    
+    // Evitar duplicados con el mismo nombre
+    partidas = partidas.filter(p => p.nombreSala !== nombreSala);
+    
+    const nuevaPartida = {
+        id: Date.now().toString(),
+        nombreSala: nombreSala || 'Sala Sin Nombre',
+        ipJugador: ipJugador || 'Jugador 1',
+        creadoEn: new Date()
+    };
+    
+    partidas.push(nuevaPartida);
+    res.json({ status: 'ok', partida: nuevaPartida });
+});
+
+// Consultar salas disponibles
 app.get('/buscar-partidas', (req, res) => {
-    res.json({ status: "ok", partidas });
+    res.json({ partidas });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Servidor activo en puerto ${PORT}`);
+    console.log(`Servidor activo en el puerto ${PORT}`);
 });
